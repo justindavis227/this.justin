@@ -51,6 +51,35 @@ export default function CalendarCard() {
     return () => { cancelled = true }
   }, [currentMonth])
 
+  // Dedup events that appear on multiple sources (e.g. work + iCloud copy).
+  // Key by title + local start date; prefer work_personal, then work_students,
+  // then apple_personal, apple_family, reminders.
+  const dedupedEvents = useMemo(() => {
+    const sourcePriority: Record<string, number> = {
+      work_personal:  0,
+      work_students:  1,
+      apple_personal: 2,
+      apple_family:   3,
+      reminders:      4,
+    }
+    const byKey = new Map<string, CalendarEvent>()
+    const noKey: CalendarEvent[] = []
+    for (const e of events) {
+      if (!e.start_at) { noKey.push(e); continue }
+      const d = parseISO(e.start_at)
+      const key = `${e.title.trim().toLowerCase()}|${format(d, 'yyyy-MM-dd')}`
+      const existing = byKey.get(key)
+      if (!existing) {
+        byKey.set(key, e)
+      } else {
+        const newP = sourcePriority[e.source] ?? 99
+        const oldP = sourcePriority[existing.source] ?? 99
+        if (newP < oldP) byKey.set(key, e)
+      }
+    }
+    return [...byKey.values(), ...noKey]
+  }, [events])
+
   const days = useMemo(() => {
     const start = startOfMonth(currentMonth)
     const end = endOfMonth(currentMonth)
@@ -67,7 +96,7 @@ export default function CalendarCard() {
   }, [currentMonth])
 
   const selectedEvents = useMemo(() => {
-    return events
+    return dedupedEvents
       .filter(e => {
         const d = e.start_at ? parseISO(e.start_at) : null
         if (!d) return false
@@ -79,10 +108,10 @@ export default function CalendarCard() {
         if (!a.start_at || !b.start_at) return 0
         return parseISO(a.start_at).getTime() - parseISO(b.start_at).getTime()
       })
-  }, [events, selectedDate])
+  }, [dedupedEvents, selectedDate])
 
   function hasEvents(day: Date): boolean {
-    return events.some(e => {
+    return dedupedEvents.some(e => {
       const d = e.start_at ? parseISO(e.start_at) : null
       return d && isSameDay(d, day)
     })
