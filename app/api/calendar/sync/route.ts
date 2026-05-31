@@ -38,9 +38,16 @@ export async function POST(req: NextRequest) {
     synced_at: new Date().toISOString(),
   }))
 
+  const deduped = Object.values(
+    rows.reduce<Record<string, typeof rows[number]>>((acc, r) => {
+      acc[r.ext_id] = r
+      return acc
+    }, {})
+  )
+
   const { error, count } = await db
     .from('calendar_events')
-    .upsert(rows, { onConflict: 'ext_id', count: 'exact' })
+    .upsert(deduped, { onConflict: 'ext_id', count: 'exact' })
 
   if (error) return Response.json({ error: error.message }, { status: 500 })
 
