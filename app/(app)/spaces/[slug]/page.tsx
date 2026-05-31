@@ -11,6 +11,7 @@ import { format, parseISO, startOfDay, addDays } from 'date-fns'
 export const revalidate = 60
 
 // Legacy leaf slugs → redirect to the consolidated parent + tab.
+// Sourcing intentionally removed — no longer a valid space.
 const REDIRECT_MAP: Record<string, { parent: string; tab: string }> = {
   southeast: { parent: 'work',     tab: 'southeast' },
   students:  { parent: 'work',     tab: 'students'  },
@@ -18,8 +19,6 @@ const REDIRECT_MAP: Record<string, { parent: string; tab: string }> = {
   finance:   { parent: 'personal', tab: 'finance'   },
   journal:   { parent: 'personal', tab: 'journal'   },
   health:    { parent: 'personal', tab: 'health'    },
-  // Resell + Build legacy children
-  sourcing:    { parent: 'resell', tab: 'sourcing'    },
   listings:    { parent: 'resell', tab: 'listings'    },
   experiments: { parent: 'build',  tab: 'experiments' },
   brandkit:    { parent: 'build',  tab: 'brandkit'    },

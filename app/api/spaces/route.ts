@@ -9,8 +9,8 @@ export async function GET(req: NextRequest) {
   const { data, error } = await db
     .from('spaces')
     .select('*')
-    .order('nav_group', { ascending: true, nullsFirst: false })
-    .order('sort_order', { ascending: true })
+    .order('parent_slug', { ascending: true, nullsFirst: true })
+    .order('sort_order',  { ascending: true })
 
   if (error) return Response.json({ error: error.message }, { status: 500 })
   return Response.json({ spaces: data ?? [] })

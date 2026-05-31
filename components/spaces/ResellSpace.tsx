@@ -10,9 +10,8 @@ import KpiRow from './shared/KpiRow'
 import { FocusList, FocusItemData } from './shared/FocusList'
 
 const TABS = [
-  { id: 'overview',  label: 'Overview' },
-  { id: 'sourcing',  label: 'Sourcing' },
-  { id: 'listings',  label: 'Listings' },
+  { id: 'overview', label: 'Overview' },
+  { id: 'listings', label: 'Listings' },
 ]
 
 interface Summary {
@@ -42,15 +41,6 @@ export default function ResellSpace() {
   return (
     <>
       {tab === 'overview' && <ResellOverview />}
-      {tab === 'sourcing' && (
-        <SpaceShell name="Resell" tabs={TABS} activeTab="sourcing"
-          tagline="Where the next items come from."
-          syncLabel="Google Sheets">
-          <div className="empty" style={{ padding: 32, textAlign: 'center', color: 'var(--muted)' }}>
-            Sourcing pipeline view — Phase 5+. The data is in the Sheet; the visualization isn’t built yet.
-          </div>
-        </SpaceShell>
-      )}
       {tab === 'listings' && (
         <SpaceShell name="Resell" tabs={TABS} activeTab="listings"
           tagline="What’s live across platforms."
