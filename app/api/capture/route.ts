@@ -58,6 +58,29 @@ export async function POST(req: NextRequest) {
       rawText = textField
       source = 'shortcut-text'
     }
+  } else if (contentType.startsWith('audio/')) {
+    source = 'shortcut-voice'
+    const buf = await req.arrayBuffer()
+    const mime = contentType.split(';')[0].trim().toLowerCase()
+    const ext = ({
+      'audio/m4a':   'm4a',
+      'audio/x-m4a': 'm4a',
+      'audio/mp4':   'm4a',
+      'audio/aac':   'm4a',
+      'audio/mpeg':  'mp3',
+      'audio/mp3':   'mp3',
+      'audio/wav':   'wav',
+      'audio/x-wav': 'wav',
+      'audio/webm':  'webm',
+      'audio/ogg':   'ogg',
+    } as Record<string, string>)[mime] ?? 'm4a'
+    const audioFile = new File([buf], `audio.${ext}`, { type: mime })
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    const transcription = await openai.audio.transcriptions.create({
+      file: audioFile,
+      model: process.env.OPENAI_WHISPER_MODEL ?? 'whisper-1',
+    })
+    rawText = transcription.text
   } else {
     const body = await req.json()
     rawText = body.content ?? body.text ?? null
