@@ -1,9 +1,11 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, after } from 'next/server'
 import { requireAuth, unauthorizedResponse } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import { CaptureClassification, TaskTier } from '@/lib/types'
+
+export const maxDuration = 60
 
 const CLASSIFIER_PROMPT = `You are a personal assistant for Justin Davis — Youth Pastor, reseller, and tool builder.
 His spaces: students, southeast (church), family, finance, journal, health, resell, build.
@@ -58,8 +60,10 @@ export async function POST(req: NextRequest) {
     }
   } else {
     const body = await req.json()
-    rawText = body.text ?? null
-    source = body.source ?? 'web-form'
+    rawText = body.content ?? body.text ?? null
+    if (body.type === 'voice') source = 'shortcut-voice'
+    else if (body.type === 'text') source = 'shortcut-text'
+    else source = body.source ?? 'web-form'
   }
 
   if (!rawText?.trim()) {
@@ -141,8 +145,8 @@ export async function POST(req: NextRequest) {
     await db.from('captures').update({ routed_to: routedTo, routed_id: routedId }).eq('id', capture.id)
   }
 
-  // Embed asynchronously (fire and forget)
-  embedCapture(rawText, capture.id, classification.space_slug)
+  // Embed after response is sent — survives serverless lifecycle via after()
+  after(embedCapture(rawText, capture.id, classification.space_slug))
 
   await db.from('audit_log').insert({
     action: 'capture',
