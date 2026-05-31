@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import {
-  format, startOfMonth, endOfMonth, eachDayOfInterval,
+  format, startOfMonth, endOfMonth, startOfDay, endOfDay, eachDayOfInterval,
   isSameMonth, isSameDay, isToday, parseISO, subDays, addDays,
 } from 'date-fns'
 import { CalendarEvent, CAL_SOURCES } from '@/lib/types'
@@ -95,13 +95,18 @@ export default function CalendarCard() {
     return [...prefixDays, ...allDays]
   }, [currentMonth])
 
+  function eventCoversDay(e: CalendarEvent, day: Date): boolean {
+    if (!e.start_at) return false
+    const s = parseISO(e.start_at)
+    const en = e.end_at ? parseISO(e.end_at) : s
+    const dStart = startOfDay(day)
+    const dEnd = endOfDay(day)
+    return s <= dEnd && en >= dStart
+  }
+
   const selectedEvents = useMemo(() => {
     return dedupedEvents
-      .filter(e => {
-        const d = e.start_at ? parseISO(e.start_at) : null
-        if (!d) return false
-        return isSameDay(d, selectedDate)
-      })
+      .filter(e => eventCoversDay(e, selectedDate))
       .sort((a, b) => {
         if (a.is_reminder && !b.is_reminder) return 1
         if (!a.is_reminder && b.is_reminder) return -1
@@ -111,10 +116,7 @@ export default function CalendarCard() {
   }, [dedupedEvents, selectedDate])
 
   function hasEvents(day: Date): boolean {
-    return dedupedEvents.some(e => {
-      const d = e.start_at ? parseISO(e.start_at) : null
-      return d && isSameDay(d, day)
-    })
+    return dedupedEvents.some(e => eventCoversDay(e, day))
   }
 
   const monthLabel = format(currentMonth, 'MMMM yyyy')
