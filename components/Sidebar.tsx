@@ -1,15 +1,28 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, CalendarRange, FolderKanban,
   Briefcase, MapPin, GraduationCap, User, Users, Wallet, BookOpen, Heart,
-  Tags, Search, Tag, Hammer, FlaskConical, Palette,
+  Tags, Search, Tag, Hammer, FlaskConical, Palette, Box,
   Settings, ChevronsLeft, ChevronDown, ChevronRight,
 } from 'lucide-react'
+import { getIcon } from '@/lib/icons'
 
-const NAV = [
+interface DbSpace {
+  slug: string
+  label: string
+  icon: string | null
+  nav_group: string | null
+  sort_order: number
+  hidden: boolean
+  attn: boolean
+}
+
+// Hardcoded fallback — used if the API fails OR returns no spaces.
+// Mirrors the legacy sidebar exactly so navigation always works.
+const HARDCODED_NAV = [
   {
     group: 'Home', items: [
       { id: 'dashboard',  label: 'Dashboard',  icon: LayoutDashboard,  href: '/dashboard' },
@@ -46,11 +59,79 @@ const NAV = [
   },
 ]
 
+interface LeafNavItem {
+  id: string
+  label: string
+  icon: typeof Briefcase
+  href: string
+}
+
+const HOME_ITEMS = HARDCODED_NAV[0].items as LeafNavItem[]
+const SYSTEM_ITEMS = HARDCODED_NAV[2].items as LeafNavItem[]
+
+// Map common group labels to their original parent icons. Unknown groups
+// fall back to Box. Group headers are not navigable — they only expand/collapse.
+const GROUP_ICON: Record<string, typeof Briefcase> = {
+  Work: Briefcase, Personal: User, Resell: Tags, Build: Hammer,
+}
+
+interface NavGroup {
+  id: string
+  label: string
+  icon: typeof Briefcase
+  children: { id: string; label: string; icon: typeof Briefcase; href: string; attn?: boolean }[]
+}
+
+function buildDbSpacesNav(spaces: DbSpace[]): NavGroup[] | null {
+  const visible = spaces.filter(s => !s.hidden && s.nav_group && s.nav_group.trim() !== '')
+  if (visible.length === 0) return null
+
+  const byGroup = new Map<string, DbSpace[]>()
+  for (const s of visible) {
+    const g = s.nav_group!
+    if (!byGroup.has(g)) byGroup.set(g, [])
+    byGroup.get(g)!.push(s)
+  }
+
+  return Array.from(byGroup.entries()).map(([group, members]) => ({
+    id: group.toLowerCase().replace(/\s+/g, '-'),
+    label: group,
+    icon: GROUP_ICON[group] ?? Box,
+    children: members
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map(s => ({
+        id: s.slug,
+        label: s.label,
+        icon: getIcon(s.icon),
+        href: `/spaces/${s.slug}`,
+        attn: s.attn,
+      })),
+  }))
+}
+
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({ work: true, personal: false, resell: false, build: false })
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({ work: true })
+  const [dbGroups, setDbGroups] = useState<NavGroup[] | null>(null)
   const pathname = usePathname()
   const router = useRouter()
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadSpaces() {
+      try {
+        const res = await fetch('/api/spaces', { cache: 'no-store' })
+        if (!res.ok) return
+        const data = await res.json()
+        const built = buildDbSpacesNav(data.spaces ?? [])
+        if (!cancelled && built && built.length > 0) setDbGroups(built)
+      } catch {
+        // swallow — hardcoded fallback remains in effect
+      }
+    }
+    loadSpaces()
+    return () => { cancelled = true }
+  }, [])
 
   function toggleExpand(id: string) {
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
@@ -60,6 +141,9 @@ export default function Sidebar() {
     if (!href) return false
     return pathname === href || pathname.startsWith(href + '/')
   }
+
+  // Spaces section: prefer DB-driven, fall back to hardcoded.
+  const spaceGroups: NavGroup[] = dbGroups ?? (HARDCODED_NAV[1].items as NavGroup[])
 
   return (
     <nav className={`sidebar${collapsed ? ' collapsed' : ''}`}>
@@ -79,58 +163,88 @@ export default function Sidebar() {
       </div>
 
       <div className="sb-nav-scroll">
-        {NAV.map((sec) => (
-          <div className="sb-section" key={sec.group}>
-            <div className="sb-section-label">{sec.group}</div>
-            {sec.items.map((it) => {
-              const Icon = it.icon
-              const hasChildren = 'children' in it && it.children && it.children.length > 0
-              const open = expanded[it.id]
-              const active = isActive('href' in it ? it.href : undefined)
+        {/* HOME */}
+        <div className="sb-section">
+          <div className="sb-section-label">Home</div>
+          {HOME_ITEMS.map(it => {
+            const Icon = it.icon
+            const active = isActive(it.href)
+            return (
+              <button
+                key={it.id}
+                className={`sb-item${active ? ' active' : ''}`}
+                onClick={() => router.push(it.href)}
+                title={it.label}
+              >
+                <Icon size={17} />
+                <span className="sb-label-text">{it.label}</span>
+              </button>
+            )
+          })}
+        </div>
 
-              return (
-                <div key={it.id}>
-                  <button
-                    className={`sb-item${active ? ' active' : ''}`}
-                    onClick={() => {
-                      if ('href' in it && it.href) router.push(it.href)
-                      if (hasChildren && !collapsed) toggleExpand(it.id)
-                    }}
-                    title={it.label}
-                  >
-                    <Icon size={17} />
-                    <span className="sb-label-text">{it.label}</span>
-                    {hasChildren && !collapsed && (
-                      open
-                        ? <ChevronDown size={15} className="sb-caret" />
-                        : <ChevronRight size={15} className="sb-caret" />
-                    )}
-                  </button>
+        {/* SPACES (DB-driven with hardcoded fallback) */}
+        <div className="sb-section">
+          <div className="sb-section-label">Spaces</div>
+          {spaceGroups.map(g => {
+            const Icon = g.icon
+            const open = expanded[g.id]
+            return (
+              <div key={g.id}>
+                <button
+                  className="sb-item"
+                  onClick={() => !collapsed && toggleExpand(g.id)}
+                  title={g.label}
+                >
+                  <Icon size={17} />
+                  <span className="sb-label-text">{g.label}</span>
+                  {!collapsed && (open
+                    ? <ChevronDown size={15} className="sb-caret" />
+                    : <ChevronRight size={15} className="sb-caret" />)}
+                </button>
+                {open && !collapsed && (
+                  <div className="sb-children">
+                    {g.children.map(ch => {
+                      const ChIcon = ch.icon
+                      return (
+                        <button
+                          key={ch.id}
+                          className={`sb-item sb-child${isActive(ch.href) ? ' active' : ''}`}
+                          onClick={() => router.push(ch.href)}
+                          title={ch.label}
+                        >
+                          <ChIcon size={15} />
+                          <span className="sb-label-text">{ch.label}</span>
+                          {ch.attn && <span className="dot-y" />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
 
-                  {hasChildren && open && !collapsed && (
-                    <div className="sb-children">
-                      {('children' in it ? it.children ?? [] : []).map((ch) => {
-                        const ChIcon = ch.icon
-                        return (
-                          <button
-                            key={ch.id}
-                            className={`sb-item sb-child${isActive(ch.href) ? ' active' : ''}`}
-                            onClick={() => router.push(ch.href)}
-                            title={ch.label}
-                          >
-                            <ChIcon size={15} />
-                            <span className="sb-label-text">{ch.label}</span>
-                            {'attn' in ch && ch.attn && <span className="dot-y" />}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        ))}
+        {/* SYSTEM */}
+        <div className="sb-section">
+          <div className="sb-section-label">System</div>
+          {SYSTEM_ITEMS.map(it => {
+            const Icon = it.icon
+            const active = isActive(it.href)
+            return (
+              <button
+                key={it.id}
+                className={`sb-item${active ? ' active' : ''}`}
+                onClick={() => router.push(it.href)}
+                title={it.label}
+              >
+                <Icon size={17} />
+                <span className="sb-label-text">{it.label}</span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       <div className="sb-spacer" />
