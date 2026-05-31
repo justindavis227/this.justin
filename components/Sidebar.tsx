@@ -70,9 +70,18 @@ const HOME_ITEMS = HARDCODED_NAV[0].items as LeafNavItem[]
 const SYSTEM_ITEMS = HARDCODED_NAV[2].items as LeafNavItem[]
 
 // Map common group labels to their original parent icons. Unknown groups
-// fall back to Box. Group headers are not navigable — they only expand/collapse.
+// fall back to Box.
 const GROUP_ICON: Record<string, typeof Briefcase> = {
   Work: Briefcase, Personal: User, Resell: Tags, Build: Hammer,
+}
+
+// Parent slugs that have dedicated dashboard pages. Clicking the group
+// header navigates there in addition to toggling the child list.
+const PARENT_HREF: Record<string, string> = {
+  work: '/spaces/work',
+  personal: '/spaces/personal',
+  resell: '/spaces/resell',
+  build: '/spaces/build',
 }
 
 interface NavGroup {
@@ -189,11 +198,16 @@ export default function Sidebar() {
           {spaceGroups.map(g => {
             const Icon = g.icon
             const open = expanded[g.id]
+            const parentHref = PARENT_HREF[g.id]
+            const isActiveParent = parentHref ? isActive(parentHref) : false
             return (
               <div key={g.id}>
                 <button
-                  className="sb-item"
-                  onClick={() => !collapsed && toggleExpand(g.id)}
+                  className={`sb-item${isActiveParent ? ' active' : ''}`}
+                  onClick={() => {
+                    if (parentHref) router.push(parentHref)
+                    if (!collapsed) toggleExpand(g.id)
+                  }}
                   title={g.label}
                 >
                   <Icon size={17} />
