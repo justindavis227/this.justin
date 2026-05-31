@@ -1,14 +1,19 @@
-export default function ProjectsPage() {
-  return (
-    <div className="content-inner">
-      <div className="section">
-        <div className="section-head">
-          <span className="section-eyebrow">Projects</span>
-        </div>
-        <div className="empty">
-          Projects are managed in Supabase. Phase 1 — project cards coming soon.
-        </div>
-      </div>
-    </div>
-  )
+import { supabaseAdmin } from '@/lib/supabase'
+import { Project } from '@/lib/types'
+import ProjectsClient from '@/components/projects/ProjectsClient'
+
+export const revalidate = 60
+
+async function getProjects(): Promise<Project[]> {
+  const db = supabaseAdmin()
+  const { data } = await db
+    .from('projects')
+    .select('*')
+    .order('updated_at', { ascending: false })
+  return (data ?? []) as Project[]
+}
+
+export default async function ProjectsPage() {
+  const projects = await getProjects().catch(() => [] as Project[])
+  return <ProjectsClient projects={projects} />
 }

@@ -29,7 +29,7 @@ export default async function ThisWeekPage() {
           {greet}, Justin.
         </h2>
         <p style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--muted)', margin: 0 }}>
-          {tasks.length} tasks. {nowCount} need you now.
+          {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'} this week. {nowCount} need you now. Nothing irreversible pending.
         </p>
       </div>
 
