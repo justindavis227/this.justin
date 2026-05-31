@@ -1,12 +1,11 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO } from 'date-fns'
+import { useState, useMemo, useEffect } from 'react'
+import {
+  format, startOfMonth, endOfMonth, eachDayOfInterval,
+  isSameMonth, isSameDay, isToday, parseISO, subDays, addDays,
+} from 'date-fns'
 import { CalendarEvent, CAL_SOURCES } from '@/lib/types'
-
-interface Props {
-  events: CalendarEvent[]
-}
 
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
 
@@ -21,10 +20,36 @@ function formatEventTime(e: CalendarEvent): string {
   return format(parseISO(e.start_at), 'h:mm a')
 }
 
-export default function CalendarCard({ events }: Props) {
+export default function CalendarCard() {
   const today = new Date()
   const [selectedDate, setSelectedDate] = useState(today)
   const [currentMonth, setCurrentMonth] = useState(today)
+  const [events, setEvents] = useState<CalendarEvent[]>([])
+  const [loading, setLoading] = useState(true)
+
+  // Fetch a window covering the grid: month ± 1 week so prefix/suffix days are populated.
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      const from = subDays(startOfMonth(currentMonth), 7).toISOString()
+      const to = addDays(endOfMonth(currentMonth), 7).toISOString()
+      try {
+        const res = await fetch(`/api/calendar?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, {
+          cache: 'no-store',
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        if (!cancelled) setEvents((data.events ?? []) as CalendarEvent[])
+      } catch {
+        if (!cancelled) setEvents([])
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [currentMonth])
 
   const days = useMemo(() => {
     const start = startOfMonth(currentMonth)
@@ -68,7 +93,7 @@ export default function CalendarCard({ events }: Props) {
   return (
     <div className="dcard cal-card">
       <div className="dcard-head">
-        <span className="dcard-eyebrow">{monthLabel}</span>
+        <span className="dcard-eyebrow">{monthLabel}{loading ? ' · …' : ''}</span>
         <div style={{ display: 'flex', gap: 4 }}>
           <button className="icon-btn" style={{ width: 26, height: 26, borderRadius: 6, fontSize: 13 }}
             onClick={() => setCurrentMonth(m => { const d = new Date(m); d.setMonth(d.getMonth() - 1); return d; })}>
@@ -107,7 +132,7 @@ export default function CalendarCard({ events }: Props) {
           {isToday(selectedDate) ? 'Today' : format(selectedDate, 'EEEE, MMM d')}
         </div>
         {selectedEvents.length === 0 ? (
-          <div className="cma-empty">No events</div>
+          <div className="cma-empty">{loading ? 'Loading…' : 'No events'}</div>
         ) : (
           <div className="cal-mini-list">
             {selectedEvents.slice(0, 5).map((e) => (
