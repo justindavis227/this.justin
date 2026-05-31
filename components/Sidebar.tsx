@@ -142,6 +142,17 @@ export default function Sidebar() {
     return () => { cancelled = true }
   }, [])
 
+  // Sync collapsed state to a body class so the grid column width
+  // (in globals.css) re-flows. Without this, only the contents
+  // re-render — the parent column stays 248px and the sidebar looks
+  // visually collapsed inside a wide gutter.
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    if (collapsed) document.body.classList.add('sidebar-collapsed')
+    else document.body.classList.remove('sidebar-collapsed')
+    return () => { document.body.classList.remove('sidebar-collapsed') }
+  }, [collapsed])
+
   function toggleExpand(id: string) {
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
   }
@@ -261,7 +272,6 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <div className="sb-spacer" />
       <div className="sb-user">
         <div className="sb-badge">
           <span className="ast">✱</span>

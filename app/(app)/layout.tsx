@@ -1,5 +1,6 @@
 import Sidebar from '@/components/Sidebar'
 import Topbar from '@/components/Topbar'
+import MobileNav from '@/components/MobileNav'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -11,6 +12,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </div>
+      <MobileNav />
     </div>
   )
 }
