@@ -4,9 +4,7 @@ import { useState, useEffect } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   LayoutDashboard, CalendarRange, FolderKanban,
-  Briefcase, MapPin, GraduationCap, User, Users, Wallet, BookOpen, Heart,
-  Tags, Tag, Hammer,
-  Settings, ChevronsLeft, ChevronDown, ChevronRight,
+  Briefcase, Settings, ChevronsLeft, ChevronDown, ChevronRight,
 } from 'lucide-react'
 import { getIcon } from '@/lib/icons'
 
@@ -27,55 +25,21 @@ interface ParentNav {
   children: { slug: string; label: string; icon: typeof Briefcase; attn?: boolean }[]
 }
 
-// Hardcoded fallback — used ONLY when the server fetch returned zero rows.
-// Mirrors the parent_slug tree: Work, Personal, Resell (Listings),
-// Build (leaf, no children).
-const HARDCODED_PARENTS: ParentNav[] = [
-  {
-    slug: 'work', label: 'Work', icon: Briefcase,
-    children: [
-      { slug: 'southeast', label: 'Southeast', icon: MapPin },
-      { slug: 'students',  label: 'Students',  icon: GraduationCap, attn: true },
-    ],
-  },
-  {
-    slug: 'personal', label: 'Personal', icon: User,
-    children: [
-      { slug: 'family',  label: 'Family',  icon: Users },
-      { slug: 'finance', label: 'Finance', icon: Wallet },
-      { slug: 'journal', label: 'Journal', icon: BookOpen },
-      { slug: 'health',  label: 'Health',  icon: Heart },
-    ],
-  },
-  {
-    slug: 'resell', label: 'Resell', icon: Tags,
-    children: [
-      { slug: 'listings', label: 'Listings', icon: Tag },
-    ],
-  },
-  {
-    slug: 'build', label: 'Build', icon: Hammer,
-    children: [],
-  },
-]
-
 const HOME_ITEMS = [
-  { id: 'dashboard',  label: 'Dashboard',  icon: LayoutDashboard,  href: '/dashboard' },
-  { id: 'this-week',  label: 'This Week',  icon: CalendarRange,    href: '/this-week' },
-  { id: 'projects',   label: 'Projects',   icon: FolderKanban,     href: '/projects' },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
+  { id: 'this-week', label: 'This Week', icon: CalendarRange,   href: '/this-week' },
+  { id: 'projects',  label: 'Projects',  icon: FolderKanban,    href: '/projects' },
 ] as const
 
 const SYSTEM_ITEMS = [
   { id: 'settings', label: 'Settings', icon: Settings, href: '/settings' },
 ] as const
 
-function buildDbParents(spaces: DbSpace[]): ParentNav[] | null {
+// Pure transform from rows → renderable parent tree. Deterministic; runs
+// identically on server and client given the same `spaces` input.
+function buildParents(spaces: DbSpace[]): ParentNav[] {
   const visible = spaces.filter(s => !s.hidden)
-  if (visible.length === 0) return null
-
   const tops = visible.filter(s => s.parent_slug === null).sort((a, b) => a.sort_order - b.sort_order)
-  if (tops.length === 0) return null
-
   return tops.map(top => ({
     slug: top.slug,
     label: top.label,
@@ -92,21 +56,16 @@ function buildDbParents(spaces: DbSpace[]): ParentNav[] | null {
   }))
 }
 
-export default function SidebarClient({ initialSpaces }: { initialSpaces: DbSpace[] }) {
+export default function SidebarClient({ spaces }: { spaces: DbSpace[] }) {
   const [collapsed, setCollapsed] = useState(false)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ work: true })
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const router = useRouter()
 
-  const dbParents = buildDbParents(initialSpaces)
-  const usedFallback = dbParents === null
-
-  // Surface fallback usage so it's visible in browser console and SSR logs.
-  if (usedFallback) {
-    // eslint-disable-next-line no-console
-    console.warn('[Sidebar] No DB spaces received — rendering hardcoded fallback. Investigate the server fetch.')
-  }
+  // Derive directly from the prop. No useState, no fallback branch, no
+  // side effects during render. Same input on server + client → same JSX.
+  const parents = buildParents(spaces)
 
   // Sync collapsed → body class so the .app grid columns animate.
   useEffect(() => {
@@ -136,8 +95,6 @@ export default function SidebarClient({ initialSpaces }: { initialSpaces: DbSpac
     if (pathname !== `/spaces/${parent.slug}`) return false
     return searchParams.get('tab') === childSlug
   }
-
-  const parents: ParentNav[] = dbParents ?? HARDCODED_PARENTS
 
   return (
     <nav className={`sidebar${collapsed ? ' collapsed' : ''}`}>
