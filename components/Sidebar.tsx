@@ -1,296 +1,36 @@
-'use client'
+// Server component — fetches spaces directly via the Supabase service-role
+// client (bypasses RLS) and hands them to SidebarClient. Doing this server-
+// side means the first paint already has the right nav, no API round-trip,
+// and no client-side fallback flash unless the DB call actually errored.
 
-import { useState, useEffect } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import {
-  LayoutDashboard, CalendarRange, FolderKanban,
-  Briefcase, MapPin, GraduationCap, User, Users, Wallet, BookOpen, Heart,
-  Tags, Tag, Hammer,
-  Settings, ChevronsLeft, ChevronDown, ChevronRight,
-} from 'lucide-react'
-import { getIcon } from '@/lib/icons'
+import { supabaseAdmin } from '@/lib/supabase'
+import SidebarClient, { DbSpace } from './SidebarClient'
 
-interface DbSpace {
-  slug: string
-  label: string
-  icon: string | null
-  parent_slug: string | null
-  sort_order: number
-  hidden: boolean
-  attn: boolean
-}
+async function loadSpaces(): Promise<DbSpace[]> {
+  try {
+    const db = supabaseAdmin()
+    const { data, error } = await db
+      .from('spaces')
+      .select('slug, label, icon, parent_slug, sort_order, hidden, attn')
+      .order('parent_slug', { ascending: true, nullsFirst: true })
+      .order('sort_order',  { ascending: true })
 
-interface ParentNav {
-  slug: string                                   // 'work', 'personal', 'resell', 'build'
-  label: string
-  icon: typeof Briefcase
-  children: {
-    slug: string                                 // tab id, e.g. 'southeast'
-    label: string
-    icon: typeof Briefcase
-    attn?: boolean
-  }[]
-}
-
-// Hardcoded fallback — used when the API returns no rows / fails.
-// Mirrors the parent_slug tree exactly so nav is always reachable.
-const HARDCODED_PARENTS: ParentNav[] = [
-  {
-    slug: 'work', label: 'Work', icon: Briefcase,
-    children: [
-      { slug: 'southeast', label: 'Southeast', icon: MapPin },
-      { slug: 'students',  label: 'Students',  icon: GraduationCap, attn: true },
-    ],
-  },
-  {
-    slug: 'personal', label: 'Personal', icon: User,
-    children: [
-      { slug: 'family',  label: 'Family',  icon: Users },
-      { slug: 'finance', label: 'Finance', icon: Wallet },
-      { slug: 'journal', label: 'Journal', icon: BookOpen },
-      { slug: 'health',  label: 'Health',  icon: Heart },
-    ],
-  },
-  {
-    slug: 'resell', label: 'Resell', icon: Tags,
-    children: [
-      { slug: 'listings', label: 'Listings', icon: Tag },
-    ],
-  },
-  {
-    slug: 'build', label: 'Build', icon: Hammer,
-    children: [],                                // leaf — no chevron, no children
-  },
-]
-
-const HOME_ITEMS = [
-  { id: 'dashboard',  label: 'Dashboard',  icon: LayoutDashboard,  href: '/dashboard' },
-  { id: 'this-week',  label: 'This Week',  icon: CalendarRange,    href: '/this-week' },
-  { id: 'projects',   label: 'Projects',   icon: FolderKanban,     href: '/projects' },
-] as const
-
-const SYSTEM_ITEMS = [
-  { id: 'settings', label: 'Settings', icon: Settings, href: '/settings' },
-] as const
-
-function buildDbParents(spaces: DbSpace[]): ParentNav[] | null {
-  const visible = spaces.filter(s => !s.hidden)
-  if (visible.length === 0) return null
-
-  const tops = visible.filter(s => s.parent_slug === null).sort((a, b) => a.sort_order - b.sort_order)
-  if (tops.length === 0) return null
-
-  return tops.map(top => ({
-    slug: top.slug,
-    label: top.label,
-    icon: getIcon(top.icon),
-    children: visible
-      .filter(s => s.parent_slug === top.slug)
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map(c => ({
-        slug: c.slug,
-        label: c.label,
-        icon: getIcon(c.icon),
-        attn: c.attn,
-      })),
-  }))
-}
-
-export default function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false)
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({ work: true })
-  const [dbParents, setDbParents] = useState<ParentNav[] | null>(null)
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
-  const router = useRouter()
-
-  useEffect(() => {
-    let cancelled = false
-    async function loadSpaces() {
-      try {
-        const res = await fetch('/api/spaces', { cache: 'no-store' })
-        if (!res.ok) return
-        const data = await res.json()
-        const built = buildDbParents(data.spaces ?? [])
-        if (!cancelled && built && built.length > 0) setDbParents(built)
-      } catch {
-        /* hardcoded fallback stays in effect */
-      }
+    if (error) {
+      console.error('[Sidebar] Supabase error loading spaces:', error.message, error)
+      return []
     }
-    loadSpaces()
-    return () => { cancelled = true }
-  }, [])
-
-  // Sync collapsed → body class so the .app grid columns animate.
-  useEffect(() => {
-    if (typeof document === 'undefined') return
-    if (collapsed) document.body.classList.add('sidebar-collapsed')
-    else document.body.classList.remove('sidebar-collapsed')
-    return () => { document.body.classList.remove('sidebar-collapsed') }
-  }, [collapsed])
-
-  function toggleExpand(slug: string) {
-    setExpanded(prev => ({ ...prev, [slug]: !prev[slug] }))
+    if (!data || data.length === 0) {
+      console.error('[Sidebar] spaces query returned 0 rows — table may be empty or RLS is blocking the service role')
+      return []
+    }
+    return data as DbSpace[]
+  } catch (e) {
+    console.error('[Sidebar] threw while loading spaces:', e instanceof Error ? e.message : e)
+    return []
   }
+}
 
-  function isHrefActive(href: string) {
-    return pathname === href || pathname.startsWith(href + '/')
-  }
-
-  function isParentActive(parent: ParentNav) {
-    const onRoute = pathname === `/spaces/${parent.slug}`
-    if (!onRoute) return false
-    const tab = searchParams.get('tab')
-    if (!tab || tab === 'overview') return true
-    // Parent is NOT active when a known child tab is selected — that child gets the highlight instead.
-    return !parent.children.some(c => c.slug === tab)
-  }
-
-  function isChildActive(parent: ParentNav, childSlug: string) {
-    if (pathname !== `/spaces/${parent.slug}`) return false
-    return searchParams.get('tab') === childSlug
-  }
-
-  const parents: ParentNav[] = dbParents ?? HARDCODED_PARENTS
-
-  // DEBUG: remove once active-state issue is confirmed fixed in prod.
-  // Logs the values that drive active highlighting on every render.
-  if (typeof window !== 'undefined') {
-    // eslint-disable-next-line no-console
-    console.log('[Sidebar render]', {
-      pathname,
-      tab: searchParams.get('tab'),
-      source: dbParents ? 'db' : 'fallback',
-      parents: parents.map(p => ({
-        slug: p.slug,
-        parentActive: isParentActive(p),
-        children: p.children.map(c => ({ slug: c.slug, childActive: isChildActive(p, c.slug) })),
-      })),
-    })
-  }
-
-  return (
-    <nav className={`sidebar${collapsed ? ' collapsed' : ''}`}>
-      <div className="sb-brand">
-        {collapsed ? (
-          <button className="sb-badge as-btn" onClick={() => setCollapsed(false)} title="Expand">
-            <span className="ast">✱</span>
-          </button>
-        ) : (
-          <>
-            <div className="sb-word">This<span className="ast">✱</span>Justin</div>
-            <button className="sb-collapse" onClick={() => setCollapsed(true)} title="Collapse">
-              <ChevronsLeft size={18} />
-            </button>
-          </>
-        )}
-      </div>
-
-      <div className="sb-nav-scroll">
-        {/* HOME */}
-        <div className="sb-section">
-          <div className="sb-section-label">Home</div>
-          {HOME_ITEMS.map(it => {
-            const Icon = it.icon
-            const active = isHrefActive(it.href)
-            return (
-              <button
-                key={it.id}
-                className={`sb-item${active ? ' active' : ''}`}
-                onClick={() => router.push(it.href)}
-                title={it.label}
-              >
-                <Icon size={17} />
-                <span className="sb-label-text">{it.label}</span>
-              </button>
-            )
-          })}
-        </div>
-
-        {/* SPACES — DB-driven with hardcoded fallback */}
-        <div className="sb-section">
-          <div className="sb-section-label">Spaces</div>
-          {parents.map(p => {
-            const Icon = p.icon
-            const parentHref = `/spaces/${p.slug}`
-            const hasChildren = p.children.length > 0
-            const parentActive = isParentActive(p)
-            const open = expanded[p.slug]
-
-            return (
-              <div key={p.slug}>
-                <button
-                  className={`sb-item${parentActive ? ' active' : ''}`}
-                  onClick={() => {
-                    router.push(parentHref)
-                    if (hasChildren && !collapsed) toggleExpand(p.slug)
-                  }}
-                  title={p.label}
-                >
-                  <Icon size={17} />
-                  <span className="sb-label-text">{p.label}</span>
-                  {hasChildren && !collapsed && (
-                    open
-                      ? <ChevronDown size={15} className="sb-caret" />
-                      : <ChevronRight size={15} className="sb-caret" />
-                  )}
-                </button>
-
-                {hasChildren && open && !collapsed && (
-                  <div className="sb-children">
-                    {p.children.map(c => {
-                      const ChIcon = c.icon
-                      const childActive = isChildActive(p, c.slug)
-                      return (
-                        <button
-                          key={c.slug}
-                          className={`sb-item sb-child${childActive ? ' active' : ''}`}
-                          onClick={() => router.push(`/spaces/${p.slug}?tab=${c.slug}`)}
-                          title={c.label}
-                        >
-                          <ChIcon size={15} />
-                          <span className="sb-label-text">{c.label}</span>
-                          {c.attn && <span className="dot-y" />}
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-
-        {/* SYSTEM */}
-        <div className="sb-section">
-          <div className="sb-section-label">System</div>
-          {SYSTEM_ITEMS.map(it => {
-            const Icon = it.icon
-            const active = isHrefActive(it.href)
-            return (
-              <button
-                key={it.id}
-                className={`sb-item${active ? ' active' : ''}`}
-                onClick={() => router.push(it.href)}
-                title={it.label}
-              >
-                <Icon size={17} />
-                <span className="sb-label-text">{it.label}</span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      <div className="sb-user">
-        <div className="sb-badge">
-          <span className="ast">✱</span>
-        </div>
-        <div className="sb-user-meta">
-          <div className="nm">Justin Davis</div>
-          <div className="em">justindavis227@gmail.com</div>
-        </div>
-      </div>
-    </nav>
-  )
+export default async function Sidebar() {
+  const spaces = await loadSpaces()
+  return <SidebarClient initialSpaces={spaces} />
 }
