@@ -29,9 +29,8 @@ export default function WorkSpace({ needsYouThisWeek, studentsThisWeek }: Props)
           name="Work"
           tabs={TABS}
           activeTab="overview"
-          tagline="Ministry leadership at a glance."
-          syncLabel="Planning Center"
-          mockBanner="Future-state mock · Planning Center integration not wired yet"
+          tagline="Ministry Overview"
+          syncLabel="Craft"
         >
           <KpiRow cols={4}>
             <KpiCard label="Weekend Attendance"  value={WORK_OVERVIEW_KPIS.weekendAttendance.value} subtitle={WORK_OVERVIEW_KPIS.weekendAttendance.sub} accent="#3B82F6" />
@@ -53,9 +52,8 @@ export default function WorkSpace({ needsYouThisWeek, studentsThisWeek }: Props)
           name="Work"
           tabs={TABS}
           activeTab="southeast"
-          tagline="Church-planting region."
-          syncLabel="Notion"
-          mockBanner="Future-state mock · Notion integration not wired yet"
+          tagline="All Church"
+          syncLabel="Craft"
         >
           <KpiRow cols={4}>
             <KpiCard label="Target Launch"   value={SOUTHEAST_KPIS.targetLaunch.value}  subtitle={SOUTHEAST_KPIS.targetLaunch.sub}  accent="#3B82F6" />
@@ -73,8 +71,7 @@ export default function WorkSpace({ needsYouThisWeek, studentsThisWeek }: Props)
           tabs={TABS}
           activeTab="students"
           tagline="Student ministry."
-          syncLabel="Planning Center"
-          mockBanner="Future-state mock · Planning Center integration not wired yet"
+          syncLabel="Craft"
         >
           <KpiRow cols={3}>
             <KpiCard label="Weekly Attendance"       value={STUDENTS_KPIS.weeklyAttendance.value}   subtitle={STUDENTS_KPIS.weeklyAttendance.sub}   accent="#3B82F6" />

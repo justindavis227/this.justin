@@ -36,7 +36,7 @@ export default function PersonalSpace({ onYourPlate, familyComingUp }: Props) {
         <SpaceShell
           name="Personal"
           tabs={TABS} activeTab="overview"
-          tagline="Life outside of work."
+          tagline="Personal Overview"
           syncLabel="Apple · iCloud"
         >
           <KpiRow cols={4}>
@@ -53,7 +53,7 @@ export default function PersonalSpace({ onYourPlate, familyComingUp }: Props) {
         <SpaceShell
           name="Personal"
           tabs={TABS} activeTab="family"
-          tagline="Shared with Sarah + kids."
+          tagline="Shared with Elizabeth"
           syncLabel="Apple · Shared"
         >
           <KpiRow cols={3}>

@@ -13,7 +13,7 @@ const VIEW_TITLES: Record<string, { title: string; sub: string }> = {
   '/settings':           { title: 'Settings',   sub: '' },
   '/spaces/southeast':   { title: 'Southeast',  sub: 'Church planting' },
   '/spaces/students':    { title: 'Students',   sub: 'Student ministry' },
-  '/spaces/family':      { title: 'Family',     sub: 'Shared with Sarah' },
+  '/spaces/family':      { title: 'Family',     sub: 'Shared with Elizabeth' },
   '/spaces/finance':     { title: 'Finance',    sub: 'Net worth · Budget' },
   '/spaces/journal':     { title: 'Journal',    sub: 'Reflection + notes' },
   '/spaces/health':      { title: 'Health',     sub: 'Habits · Macros' },
