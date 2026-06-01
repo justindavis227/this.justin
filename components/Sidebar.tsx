@@ -1,13 +1,13 @@
-// Server component — resolves the spaces list once (DB via service-role,
-// falling back to a hardcoded array if DB is empty or errors) and hands
-// the resolved array to SidebarClient. The client never makes its own
-// fallback decision, so server-rendered HTML and client-hydrated output
-// are always derived from the same input → no hydration mismatch.
+// Server component — fetches /api/spaces with the API_SECRET Bearer so it
+// shares whatever execution context the working API route has. This avoids
+// the previous direct supabaseAdmin() call (which was failing silently for
+// reasons we couldn't pin down) and routes through the demonstrably-working
+// /api/spaces endpoint instead. Falls back to a hardcoded array on any
+// failure path so navigation is always reachable.
 
-import { supabaseAdmin } from '@/lib/supabase'
+import { headers } from 'next/headers'
 import SidebarClient, { DbSpace } from './SidebarClient'
 
-// Used only when the DB call fails or returns zero rows.
 const HARDCODED_FALLBACK_SPACES: DbSpace[] = [
   { slug: 'work',      label: 'Work',      icon: 'Briefcase',     parent_slug: null,       sort_order: 1, hidden: false, attn: false },
   { slug: 'southeast', label: 'Southeast', icon: 'MapPin',        parent_slug: 'work',     sort_order: 1, hidden: false, attn: false },
@@ -24,22 +24,41 @@ const HARDCODED_FALLBACK_SPACES: DbSpace[] = [
 
 async function loadSpaces(): Promise<DbSpace[]> {
   try {
-    const db = supabaseAdmin()
-    const { data, error } = await db
-      .from('spaces')
-      .select('slug, label, icon, parent_slug, sort_order, hidden, attn')
-      .order('parent_slug', { ascending: true, nullsFirst: true })
-      .order('sort_order',  { ascending: true })
+    const hdrs = await headers()
+    const host = hdrs.get('host')
+    const proto = hdrs.get('x-forwarded-proto') ?? (host?.startsWith('localhost') ? 'http' : 'https')
+    const apiSecret = process.env.API_SECRET
 
-    if (error) {
-      console.error('[Sidebar] Supabase error loading spaces:', error.message, error)
+    if (!host) {
+      console.error('[Sidebar] no host header — using fallback')
       return HARDCODED_FALLBACK_SPACES
     }
-    if (!data || data.length === 0) {
-      console.error('[Sidebar] spaces query returned 0 rows — table may be empty or RLS is blocking the service role; using hardcoded fallback')
+    if (!apiSecret) {
+      console.error('[Sidebar] API_SECRET not set — cannot authenticate internal call to /api/spaces; using fallback')
       return HARDCODED_FALLBACK_SPACES
     }
-    return data as DbSpace[]
+
+    const url = `${proto}://${host}/api/spaces`
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${apiSecret}` },
+      cache: 'no-store',
+    })
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      console.error(`[Sidebar] /api/spaces returned ${res.status} ${res.statusText}: ${body.slice(0, 200)}`)
+      return HARDCODED_FALLBACK_SPACES
+    }
+
+    const data = await res.json()
+    const spaces = (data.spaces ?? []) as DbSpace[]
+
+    if (spaces.length === 0) {
+      console.error('[Sidebar] /api/spaces returned empty array — using fallback')
+      return HARDCODED_FALLBACK_SPACES
+    }
+
+    return spaces
   } catch (e) {
     console.error('[Sidebar] threw while loading spaces:', e instanceof Error ? e.message : e)
     return HARDCODED_FALLBACK_SPACES
