@@ -153,6 +153,22 @@ export default function Sidebar() {
 
   const parents: ParentNav[] = dbParents ?? HARDCODED_PARENTS
 
+  // DEBUG: remove once active-state issue is confirmed fixed in prod.
+  // Logs the values that drive active highlighting on every render.
+  if (typeof window !== 'undefined') {
+    // eslint-disable-next-line no-console
+    console.log('[Sidebar render]', {
+      pathname,
+      tab: searchParams.get('tab'),
+      source: dbParents ? 'db' : 'fallback',
+      parents: parents.map(p => ({
+        slug: p.slug,
+        parentActive: isParentActive(p),
+        children: p.children.map(c => ({ slug: c.slug, childActive: isChildActive(p, c.slug) })),
+      })),
+    })
+  }
+
   return (
     <nav className={`sidebar${collapsed ? ' collapsed' : ''}`}>
       <div className="sb-brand">
