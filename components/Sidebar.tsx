@@ -134,7 +134,9 @@ export default function Sidebar() {
   // First render (server + first client) uses HARDCODED_FALLBACK_SPACES,
   // guaranteeing identical output. After the useEffect fetch, `spaces`
   // updates and the real DB nav replaces it.
+  console.log('[Sidebar] raw spaces from API:', spaces)
   const parents = buildParents(spaces ?? HARDCODED_FALLBACK_SPACES)
+  console.log('[Sidebar] buildParents output:', parents)
 
   return (
     <nav className={`sidebar${collapsed ? ' collapsed' : ''}`}>
